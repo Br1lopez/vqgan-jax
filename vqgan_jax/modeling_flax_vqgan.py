@@ -438,23 +438,17 @@ class Decoder(nn.Module):
         dtype=self.dtype,
     )
 
-  def __call__(self, hidden_states, deterministic: bool = True, operation: str = "default"):
+  def __call__(self, hidden_states, deterministic: bool = True):
     # timestep embedding
     temb = None
 
-    if not (operation == "from_z_blockin" or operation == "from_z_middle"):
-        # z to block_in
-        hidden_states = self.conv_in(hidden_states)
-        if operation == "to_z_blockin":
-            print(hidden_states)
-            return hidden_states
+    # z to block_in
+    hidden_states = self.conv_in(hidden_states)
+    print("z to block_in " + str(np.shape(hidden_states)) + str(hidden_states))
 
-    if not (operation == "from_z_middle"):
-        # middle
-        hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
-        if operation == "to_z_middle":
-            print(hidden_states)
-            return hidden_states
+    # middle
+    hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
+    print("middle " + str(np.shape(hidden_states)) + str(hidden_states))
 
     # upsampling
     for block in reversed(self.up):
@@ -565,19 +559,24 @@ class VQModule(nn.Module):
     quant_states, indices = self.quantize(hidden_states)
     return quant_states, indices
 
-  def decode(self, hidden_states, deterministic: bool = True, operation: str = "default"):
+  def decode(self, hidden_states, deterministic: bool = True):
     hidden_states = self.post_quant_conv(hidden_states)
-    hidden_states = self.decoder(hidden_states, deterministic=deterministic, operation=operation)
+    hidden_states = self.decoder(hidden_states, deterministic=deterministic)
     return hidden_states
 
-  def decode_code(self, code_b, operation: str = "default"):
+  def decode_code(self, code_b):
     hidden_states = self.quantize.get_codebook_entry(code_b)
-    hidden_states = self.decode(hidden_states, operation=operation)
+    hidden_states = self.decode(hidden_states)
     return hidden_states
 
-  def __call__(self, pixel_values, deterministic: bool = True, operation: str = "default"):
+  def get_z(self, code_b):
+      hidden_states = self.quantize.get_codebook_entry(code_b)
+      hidden_states = self.decode_get_z(hidden_states)
+      return hidden_states
+
+  def __call__(self, pixel_values, deterministic: bool = True):
     quant_states, indices = self.encode(pixel_values, deterministic)
-    hidden_states = self.decode(quant_states, deterministic, operation)
+    hidden_states = self.decode(quant_states, deterministic)
     return hidden_states, indices
 
 
@@ -647,10 +646,25 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
         method=self.module.decode,
     )
 
-  def decode_code(self, indices, params: dict = None, operation: str = "default"):
-    return self.module.apply({"params": params or self.params, "operation": operation},
+  def decode_get_z(self,
+             hidden_states,
+             params: dict = None,
+             dropout_rng: jax.random.PRNGKey = None,
+             train: bool = False):
+      # Handle any PRNG if needed
+      rngs = {"dropout": dropout_rng} if dropout_rng is not None else {}
+
+      return self.module.apply(
+          {"params": params or self.params},
+          jnp.array(hidden_states),
+          not train,
+          rngs=rngs,
+          method=self.module.decode_get_z,
+      )
+
+  def decode_code(self, indices, params: dict = None):
+    return self.module.apply({"params": params or self.params},
                              jnp.array(indices, dtype="i4"),
-                             operation=operation,
                              method=self.module.decode_code)
 
   def get_z(self, indices, params: dict = None):
