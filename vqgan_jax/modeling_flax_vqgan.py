@@ -585,13 +585,13 @@ class VQModule(nn.Module):
     hidden_states = self.decode(hidden_states)
     return hidden_states
 
-  def decode_code_to_z(self, code_b):
-      hidden_states = self.quantize.get_codebook_entry(code_b)
+  def decode_code_to_z(self, hidden_states):
+      #hidden_states = self.quantize.get_codebook_entry(code_b)
       hidden_states = self.decode_to_z(hidden_states)
       return hidden_states
 
-  def decode_code_from_z(self, code_b):
-      hidden_states = self.quantize.get_codebook_entry(code_b)
+  def decode_code_from_z(self, hidden_states):
+      #hidden_states = self.quantize.get_codebook_entry(code_b)
       hidden_states = self.decode_from_z(hidden_states)
       return hidden_states
 
