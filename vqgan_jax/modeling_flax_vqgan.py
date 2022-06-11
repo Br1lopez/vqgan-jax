@@ -648,7 +648,7 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
     )
 
   def decode_code(self, indices, params: dict = None, operation: str = "default"):
-    return self.module.apply({"params": params or self.params},
+    return self.module.apply({"params": params or self.params, "operation": operation},
                              jnp.array(indices, dtype="i4"),
                              operation=operation,
                              method=self.module.decode_code)
