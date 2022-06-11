@@ -444,11 +444,9 @@ class Decoder(nn.Module):
 
     # z to block_in
     hidden_states = self.conv_in(hidden_states)
-    print("z to block_in " + str(np.shape(hidden_states)) + str(hidden_states))
 
     # middle
     hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
-    print("middle " + str(np.shape(hidden_states)) + str(hidden_states))
 
     # upsampling
     for block in reversed(self.up):
@@ -569,11 +567,6 @@ class VQModule(nn.Module):
     hidden_states = self.decode(hidden_states)
     return hidden_states
 
-  def get_z(self, code_b):
-      hidden_states = self.quantize.get_codebook_entry(code_b)
-      hidden_states = self.decode_get_z(hidden_states)
-      return hidden_states
-
   def __call__(self, pixel_values, deterministic: bool = True):
     quant_states, indices = self.encode(pixel_values, deterministic)
     hidden_states = self.decode(quant_states, deterministic)
@@ -646,31 +639,10 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
         method=self.module.decode,
     )
 
-  def decode_get_z(self,
-             hidden_states,
-             params: dict = None,
-             dropout_rng: jax.random.PRNGKey = None,
-             train: bool = False):
-      # Handle any PRNG if needed
-      rngs = {"dropout": dropout_rng} if dropout_rng is not None else {}
-
-      return self.module.apply(
-          {"params": params or self.params},
-          jnp.array(hidden_states),
-          not train,
-          rngs=rngs,
-          method=self.module.decode_get_z,
-      )
-
   def decode_code(self, indices, params: dict = None):
     return self.module.apply({"params": params or self.params},
                              jnp.array(indices, dtype="i4"),
                              method=self.module.decode_code)
-
-  def get_z(self, indices, params: dict = None):
-    return self.module.apply({"params": params or self.params},
-                             jnp.array(indices, dtype="i4"),
-                             method=self.module.get_z)
 
   def __call__(
       self,
