@@ -438,29 +438,37 @@ class Decoder(nn.Module):
         dtype=self.dtype,
     )
 
-  def __call__(self, hidden_states, deterministic: bool = True):
-    # timestep embedding
-    temb = None
+  def __call__(self, hidden_states, deterministic: bool = True, operation: str = "default"):
+      # timestep embedding
+      temb = None
 
-    # z to block_in
-    hidden_states = self.conv_in(hidden_states)
+      if not (operation == "from_z_blockin" or operation == "from_z_middle"):
+          # z to block_in
+          hidden_states = self.conv_in(hidden_states)
+          if operation == "to_z_blockin":
+              print(hidden_states)
+              return hidden_states
 
-    # middle
-    hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
+      if not (operation == "from_z_middle"):
+          # middle
+          hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
+          if operation == "to_z_middle":
+              print(hidden_states)
+              return hidden_states
 
-    # upsampling
-    for block in reversed(self.up):
-      hidden_states = block(hidden_states, temb, deterministic=deterministic)
+      # upsampling
+      for block in reversed(self.up):
+          hidden_states = block(hidden_states, temb, deterministic=deterministic)
 
-    # end
-    if self.config.give_pre_end:
+      # end
+      if self.config.give_pre_end:
+          return hidden_states
+
+      hidden_states = self.norm_out(hidden_states)
+      hidden_states = nn.swish(hidden_states)
+      hidden_states = self.conv_out(hidden_states)
+
       return hidden_states
-
-    hidden_states = self.norm_out(hidden_states)
-    hidden_states = nn.swish(hidden_states)
-    hidden_states = self.conv_out(hidden_states)
-
-    return hidden_states
 
 
 class VectorQuantizer(nn.Module):
