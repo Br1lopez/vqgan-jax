@@ -121,7 +121,7 @@ class ResnetBlock(nn.Module):
                     dtype=self.dtype,
                 )
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True):
         residual = hidden_states
         hidden_states = self.norm1(hidden_states)
         hidden_states = nn.swish(hidden_states)
@@ -133,7 +133,7 @@ class ResnetBlock(nn.Module):
 
         hidden_states = self.norm2(hidden_states)
         hidden_states = nn.swish(hidden_states)
-        hidden_states = self.dropout(hidden_states, deterministic, operation)
+        hidden_states = self.dropout(hidden_states, deterministic)
         hidden_states = self.conv2(hidden_states)
 
         if self.in_channels != self.out_channels_:
@@ -174,7 +174,7 @@ class AttnBlock(nn.Module):
         query = query.reshape((batch, height * width, channels))
         key = key.reshape((batch, height * width, channels))
         attn_weights = jnp.einsum("...qc,...kc->...qk", query, key)
-        attn_weights = attn_weights * (int(channels) ** -0.5)
+        attn_weights = attn_weights * (int(channels)**-0.5)
         attn_weights = nn.softmax(attn_weights, axis=2)
 
         ## attend to values
@@ -224,11 +224,11 @@ class UpsamplingBlock(nn.Module):
                                      self.config.resamp_with_conv,
                                      dtype=self.dtype)
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True):
         for res_block in self.block:
             hidden_states = res_block(hidden_states,
                                       temb,
-                                      deterministic=deterministic, operation=operation)
+                                      deterministic=deterministic)
             for attn_block in self.attn:
                 hidden_states = attn_block(hidden_states)
 
@@ -245,7 +245,7 @@ class DownsamplingBlock(nn.Module):
     dtype: jnp.dtype = jnp.float32
 
     def setup(self):
-        in_ch_mult = (1,) + tuple(self.config.ch_mult)
+        in_ch_mult = (1, ) + tuple(self.config.ch_mult)
         block_in = self.config.ch * in_ch_mult[self.block_idx]
         block_out = self.config.ch * self.config.ch_mult[self.block_idx]
         self.temb_ch = 0
@@ -272,11 +272,11 @@ class DownsamplingBlock(nn.Module):
                                          self.config.resamp_with_conv,
                                          dtype=self.dtype)
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True):
         for res_block in self.block:
             hidden_states = res_block(hidden_states,
                                       temb,
-                                      deterministic=deterministic, operation=operation)
+                                      deterministic=deterministic)
             for attn_block in self.attn:
                 hidden_states = attn_block(hidden_states)
 
@@ -309,14 +309,14 @@ class MidBlock(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True):
         hidden_states = self.block_1(hidden_states,
                                      temb,
-                                     deterministic=deterministic, operation=operation)
+                                     deterministic=deterministic)
         hidden_states = self.attn_1(hidden_states)
         hidden_states = self.block_2(hidden_states,
                                      temb,
-                                     deterministic=deterministic, operation=operation)
+                                     deterministic=deterministic)
         return hidden_states
 
 
@@ -367,17 +367,17 @@ class Encoder(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, pixel_values, deterministic: bool = True):
         # timestep embedding
         temb = None
 
         # downsampling
         hidden_states = self.conv_in(pixel_values)
         for block in self.down:
-            hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation)
+            hidden_states = block(hidden_states, temb, deterministic=deterministic)
 
         # middle
-        hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
+        hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
 
         # end
         hidden_states = self.norm_out(hidden_states)
@@ -397,7 +397,7 @@ class Decoder(nn.Module):
         # compute in_ch_mult, block_in and curr_res at lowest res
         block_in = self.config.ch * self.config.ch_mult[self.config.num_resolutions
                                                         - 1]
-        curr_res = self.config.resolution // 2 ** (self.config.num_resolutions - 1)
+        curr_res = self.config.resolution // 2**(self.config.num_resolutions - 1)
         self.z_shape = (1, self.config.z_channels, curr_res, curr_res)
 
         # z to block_in
@@ -438,27 +438,19 @@ class Decoder(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, hidden_states, deterministic: bool = True, operation: str = "default"):
+    def __call__(self, hidden_states, deterministic: bool = True):
         # timestep embedding
         temb = None
 
-        if not (operation == "from_z_blockin" or operation == "from_z_middle"):
-            # z to block_in
-            hidden_states = self.conv_in(hidden_states)
-            if operation == "to_z_blockin":
-                print(hidden_states)
-                return hidden_states
+        # z to block_in
+        hidden_states = self.conv_in(hidden_states)
 
-        if not (operation == "from_z_middle"):
-            # middle
-            hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
-            if operation == "to_z_middle":
-                print(hidden_states)
-                return hidden_states
+        # middle
+        hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
 
         # upsampling
         for block in reversed(self.up):
-            hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation)
+            hidden_states = block(hidden_states, temb, deterministic=deterministic)
 
         # end
         if self.config.give_pre_end:
@@ -473,15 +465,15 @@ class Decoder(nn.Module):
 
 class VectorQuantizer(nn.Module):
     """
-    see https://github.com/MishaLaskin/vqvae/blob/d761a999e2267766400dc646d82d3ac3657771d4/models/quantizer.py
-    ____________________________________________
-    Discretization bottleneck part of the VQ-VAE.
-    Inputs:
-    - n_e : number of embeddings
-    - e_dim : dimension of embedding
-    - beta : commitment cost used in loss term, beta * ||z_e(x)-sg[e]||^2
-    _____________________________________________
-    """
+      see https://github.com/MishaLaskin/vqvae/blob/d761a999e2267766400dc646d82d3ac3657771d4/models/quantizer.py
+      ____________________________________________
+      Discretization bottleneck part of the VQ-VAE.
+      Inputs:
+      - n_e : number of embeddings
+      - e_dim : dimension of embedding
+      - beta : commitment cost used in loss term, beta * ||z_e(x)-sg[e]||^2
+      _____________________________________________
+      """
 
     config: VQGANConfig
     dtype: jnp.dtype = jnp.float32
@@ -493,14 +485,14 @@ class VectorQuantizer(nn.Module):
 
     def __call__(self, hidden_states):
         """
-        Inputs the output of the encoder network z and maps it to a discrete
-        one-hot vector that is the index of the closest embedding vector e_j
-        z (continuous) -> z_q (discrete)
-        z.shape = (batch, channel, height, width)
-        quantization pipeline:
-            1. get encoder input (B,C,H,W)
-            2. flatten input to (B*H*W,C)
-        """
+            Inputs the output of the encoder network z and maps it to a discrete
+            one-hot vector that is the index of the closest embedding vector e_j
+            z (continuous) -> z_q (discrete)
+            z.shape = (batch, channel, height, width)
+            quantization pipeline:
+                1. get encoder input (B,C,H,W)
+                2. flatten input to (B*H*W,C)
+            """
         #  flatten
         hidden_states_flattended = hidden_states.reshape(
             (-1, self.config.embed_dim))
@@ -510,8 +502,8 @@ class VectorQuantizer(nn.Module):
 
         # distances from z to embeddings e_j (z - e)^2 = z^2 + e^2 - 2 e * z
         emb_weights = self.variables["params"]["embedding"]["embedding"]
-        distance = (jnp.sum(hidden_states_flattended ** 2, axis=1, keepdims=True) +
-                    jnp.sum(emb_weights ** 2, axis=1) -
+        distance = (jnp.sum(hidden_states_flattended**2, axis=1, keepdims=True) +
+                    jnp.sum(emb_weights**2, axis=1) -
                     2 * jnp.dot(hidden_states_flattended, emb_weights.T))
 
         # get quantized latent vectors
@@ -559,15 +551,15 @@ class VQModule(nn.Module):
             dtype=self.dtype,
         )
 
-    def encode(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
-        hidden_states = self.encoder(pixel_values, deterministic=deterministic, operation=operation)
+    def encode(self, pixel_values, deterministic: bool = True):
+        hidden_states = self.encoder(pixel_values, deterministic=deterministic)
         hidden_states = self.quant_conv(hidden_states)
         quant_states, indices = self.quantize(hidden_states)
         return quant_states, indices
 
-    def decode(self, hidden_states, deterministic: bool = True, operation: str = "to_z_middle"):
+    def decode(self, hidden_states, deterministic: bool = True):
         hidden_states = self.post_quant_conv(hidden_states)
-        hidden_states = self.decoder(hidden_states, deterministic=deterministic, operation=operation)
+        hidden_states = self.decoder(hidden_states, deterministic=deterministic)
         return hidden_states
 
     def decode_code(self, code_b):
@@ -575,17 +567,17 @@ class VQModule(nn.Module):
         hidden_states = self.decode(hidden_states)
         return hidden_states
 
-    def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
-        quant_states, indices = self.encode(pixel_values, deterministic, operation)
-        hidden_states = self.decode(quant_states, deterministic, operation)
+    def __call__(self, pixel_values, deterministic: bool = True):
+        quant_states, indices = self.encode(pixel_values, deterministic)
+        hidden_states = self.decode(quant_states, deterministic)
         return hidden_states, indices
 
 
 class VQGANPreTrainedModel(FlaxPreTrainedModel):
     """
-    An abstract class to handle weights initialization and a simple interface
-    for downloading and loading pretrained models.
-    """
+      An abstract class to handle weights initialization and a simple interface
+      for downloading and loading pretrained models.
+      """
 
     config_class = VQGANConfig
     base_model_prefix = "model"
