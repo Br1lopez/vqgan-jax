@@ -444,7 +444,7 @@ class Decoder(nn.Module):
 
         # z to block_in
         hidden_states = self.conv_in(hidden_states)
-
+        """
         # middle
         hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
 
@@ -459,7 +459,7 @@ class Decoder(nn.Module):
         hidden_states = self.norm_out(hidden_states)
         hidden_states = nn.swish(hidden_states)
         hidden_states = self.conv_out(hidden_states)
-
+        """
         return hidden_states
 
 
