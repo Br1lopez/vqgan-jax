@@ -562,7 +562,7 @@ class VQModule(nn.Module):
         hidden_states = self.decoder(hidden_states, deterministic=deterministic)
         return hidden_states
 
-    def decodre_code(self, code_b):
+    def decode_code(self, code_b):
         hidden_states = self.quantize.get_codebook_entry(code_b)
         hidden_states = self.decode(hidden_states)
         return hidden_states
@@ -639,7 +639,7 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
             method=self.module.decode,
         )
 
-    def decodre_code(self, indices, params: dict = None):
+    def decode_code(self, indices, params: dict = None):
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
                                  method=self.module.decode_code)
