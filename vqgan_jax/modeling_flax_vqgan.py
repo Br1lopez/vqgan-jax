@@ -121,7 +121,7 @@ class ResnetBlock(nn.Module):
                     dtype=self.dtype,
                 )
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
         residual = hidden_states
         hidden_states = self.norm1(hidden_states)
         hidden_states = nn.swish(hidden_states)
@@ -133,7 +133,7 @@ class ResnetBlock(nn.Module):
 
         hidden_states = self.norm2(hidden_states)
         hidden_states = nn.swish(hidden_states)
-        hidden_states = self.dropout(hidden_states, deterministic)
+        hidden_states = self.dropout(hidden_states, deterministic, operation)
         hidden_states = self.conv2(hidden_states)
 
         if self.in_channels != self.out_channels_:
@@ -224,11 +224,11 @@ class UpsamplingBlock(nn.Module):
                                      self.config.resamp_with_conv,
                                      dtype=self.dtype)
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
         for res_block in self.block:
             hidden_states = res_block(hidden_states,
                                       temb,
-                                      deterministic=deterministic)
+                                      deterministic=deterministic, operation=operation)
             for attn_block in self.attn:
                 hidden_states = attn_block(hidden_states)
 
@@ -272,11 +272,11 @@ class DownsamplingBlock(nn.Module):
                                          self.config.resamp_with_conv,
                                          dtype=self.dtype)
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
         for res_block in self.block:
             hidden_states = res_block(hidden_states,
                                       temb,
-                                      deterministic=deterministic)
+                                      deterministic=deterministic, operation=operation)
             for attn_block in self.attn:
                 hidden_states = attn_block(hidden_states)
 
@@ -309,14 +309,14 @@ class MidBlock(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
         hidden_states = self.block_1(hidden_states,
                                      temb,
-                                     deterministic=deterministic)
+                                     deterministic=deterministic, operation=operation)
         hidden_states = self.attn_1(hidden_states)
         hidden_states = self.block_2(hidden_states,
                                      temb,
-                                     deterministic=deterministic)
+                                     deterministic=deterministic, operation=operation)
         return hidden_states
 
 
@@ -367,17 +367,17 @@ class Encoder(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, pixel_values, deterministic: bool = True):
+    def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
         # timestep embedding
         temb = None
 
         # downsampling
         hidden_states = self.conv_in(pixel_values)
         for block in self.down:
-            hidden_states = block(hidden_states, temb, deterministic=deterministic)
+            hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation)
 
         # middle
-        hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
+        hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
 
         # end
         hidden_states = self.norm_out(hidden_states)
@@ -451,14 +451,14 @@ class Decoder(nn.Module):
 
         if not (operation == "from_z_middle"):
             # middle
-            hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
+            hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
             if operation == "to_z_middle":
                 print(hidden_states)
                 return hidden_states
 
         # upsampling
         for block in reversed(self.up):
-            hidden_states = block(hidden_states, temb, deterministic=deterministic)
+            hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation)
 
         # end
         if self.config.give_pre_end:
@@ -559,25 +559,15 @@ class VQModule(nn.Module):
             dtype=self.dtype,
         )
 
-    def encode(self, pixel_values, deterministic: bool = True):
-        hidden_states = self.encoder(pixel_values, deterministic=deterministic)
+    def encode(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
+        hidden_states = self.encoder(pixel_values, deterministic=deterministic, operation=operation)
         hidden_states = self.quant_conv(hidden_states)
         quant_states, indices = self.quantize(hidden_states)
         return quant_states, indices
 
-    def decode(self, hidden_states, deterministic: bool = True):
-        hidden_states = self.post_quant_conv(hidden_states)
-        hidden_states = self.decoder(hidden_states, deterministic=deterministic)
-        return hidden_states
-
-    def decode_to_z(self, hidden_states, deterministic: bool = True, operation: str = "to_z_middle"):
+    def decode(self, hidden_states, deterministic: bool = True, operation: str = "to_z_middle"):
         hidden_states = self.post_quant_conv(hidden_states)
         hidden_states = self.decoder(hidden_states, deterministic=deterministic, operation=operation)
-        return hidden_states
-
-    def decode_from_z(self, hidden_states, deterministic: bool = True):
-        hidden_states = self.post_quant_conv(hidden_states)
-        hidden_states = self.decoder(hidden_states, deterministic=deterministic, operation="from_z_middle")
         return hidden_states
 
     def decode_code(self, code_b):
@@ -585,19 +575,9 @@ class VQModule(nn.Module):
         hidden_states = self.decode(hidden_states)
         return hidden_states
 
-    def decode_code_to_z(self, code_b):
-        hidden_states = self.quantize.get_codebook_entry(code_b)
-        hidden_states = self.decode_to_z(hidden_states, operation="to_z_middle")
-        return hidden_states
-
-    def decode_code_from_z(self, hidden_states):
-        # hidden_states = self.quantize.get_codebook_entry(code_b)
-        hidden_states = self.decode_from_z(hidden_states)
-        return hidden_states
-
-    def __call__(self, pixel_values, deterministic: bool = True):
-        quant_states, indices = self.encode(pixel_values, deterministic)
-        hidden_states = self.decode(quant_states, deterministic)
+    def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
+        quant_states, indices = self.encode(pixel_values, deterministic, operation)
+        hidden_states = self.decode(quant_states, deterministic, operation)
         return hidden_states, indices
 
 
@@ -667,52 +647,10 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
             method=self.module.decode,
         )
 
-    def decode_to_z(self,
-                    hidden_states,
-                    params: dict = None,
-                    dropout_rng: jax.random.PRNGKey = None,
-                    train: bool = False):
-        # Handle any PRNG if needed
-        rngs = {"dropout": dropout_rng} if dropout_rng is not None else {}
-
-        return self.module.apply(
-            {"params": params or self.params},
-            jnp.array(hidden_states),
-            not train,
-            rngs=rngs,
-            method=self.module.decode_to_z,
-        )
-
-    def decode_from_z(self,
-                      hidden_states,
-                      params: dict = None,
-                      dropout_rng: jax.random.PRNGKey = None,
-                      train: bool = False):
-        # Handle any PRNG if needed
-        rngs = {"dropout": dropout_rng} if dropout_rng is not None else {}
-
-        return self.module.apply(
-            {"params": params or self.params},
-            jnp.array(hidden_states),
-            not train,
-            rngs=rngs,
-            method=self.module.decode_from_z,
-        )
-
     def decode_code(self, indices, params: dict = None):
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
                                  method=self.module.decode_code)
-
-    def decode_code_to_z(self, indices, params: dict = None):
-        return self.module.apply({"params": params or self.params},
-                                 jnp.array(indices, dtype="i4"),
-                                 method=self.module.decode_code_to_z)
-
-    def decode_code_from_z(self, indices, params: dict = None):
-        return self.module.apply({"params": params or self.params},
-                                 jnp.array(indices, dtype="i4"),
-                                 method=self.module.decode_code_from_z)
 
     def __call__(
             self,
