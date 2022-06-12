@@ -639,7 +639,7 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
             method=self.module.decode,
         )
 
-    def decode_code(self, indices, params: dict = None):
+    def decodre_code(self, indices, params: dict = None):
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
                                  method=self.module.decode_code)
