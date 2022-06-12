@@ -442,7 +442,7 @@ class Decoder(nn.Module):
         # timestep embedding
         temb = None
 
-        print("EEEEEEEEEEEEEEEH")
+        print("aaaH")
         # z to block_in
         hidden_states = self.conv_in(hidden_states)
         """
