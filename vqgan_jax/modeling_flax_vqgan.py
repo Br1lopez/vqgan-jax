@@ -442,7 +442,6 @@ class Decoder(nn.Module):
         # timestep embedding
         temb = None
 
-        print("Fase 1", flush=True)
         if not (self.config.operation_type == "from_z_blockin" or self.config.operation_type == "from_z_middle"):
             # z to block_in
             hidden_states = self.conv_in(hidden_states)
@@ -450,8 +449,6 @@ class Decoder(nn.Module):
                 print(self.config.operation_type, flush=True)
                 return hidden_states
 
-
-        print("Fase 2", flush=True)
         if not (self.config.operation_type == "from_z_middle"):
             # middle
             if self.config.operation_type == "from_z_blockin":
@@ -462,7 +459,6 @@ class Decoder(nn.Module):
                     print(self.config.operation_type, flush=True)
                     return hidden_states
 
-        print("Fase final", flush=True)
         if self.config.operation_type == "from_z_middle":
             for block in reversed(self.up):
                 hidden_states = block(self.config.z_array, temb, deterministic=deterministic)
@@ -657,7 +653,9 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
         method=self.module.decode,
     )
 
-  def decode_code(self, indices, params: dict = None):
+  def decode_code(self, indices, params: dict = None, operation: str = "default", z_array = None):
+    self.config.operation_type = operation
+    self.config.z_array = z_array
     return self.module.apply({"params": params or self.params},
                              jnp.array(indices, dtype="i4"),
                              method=self.module.decode_code)
