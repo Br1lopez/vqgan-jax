@@ -452,42 +452,6 @@ class Decoder(nn.Module):
         if operation_type == "to_z_middle":
             hidden_states = self.conv_in(hidden_states)
             return self.mid(hidden_states, temb, deterministic=deterministic)
-        if operation_type == "from_z_blockin":
-            hidden_states = self.conv_in(hidden_states)
-            # middle
-            hidden_states = self.mid(z_array, temb, deterministic=deterministic)
-
-            for block in reversed(self.up):
-                hidden_states = block(hidden_states, temb, deterministic=deterministic)
-
-            # end
-            if self.config.give_pre_end:
-                return hidden_states
-
-            hidden_states = self.norm_out(hidden_states)
-            hidden_states = nn.swish(hidden_states)
-            hidden_states = self.conv_out(hidden_states)
-
-            return hidden_states
-        if operation_type == "from_z_middle":
-            # z to block_in
-            hidden_states = self.conv_in(hidden_states)
-
-            # middle
-            hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
-            
-            for block in reversed(self.up):
-                hidden_states = block(z_array, temb, deterministic=deterministic)
-
-            # end
-            if self.config.give_pre_end:
-                return hidden_states
-
-            hidden_states = self.norm_out(hidden_states)
-            hidden_states = nn.swish(hidden_states)
-            hidden_states = self.conv_out(hidden_states)
-
-            return hidden_states
         else:
             # z to block_in
             hidden_states = self.conv_in(hidden_states)
@@ -498,6 +462,38 @@ class Decoder(nn.Module):
 
             for block in reversed(self.up):
                 hidden_states = block(hidden_states, temb, deterministic=deterministic)
+
+            # end
+            if self.config.give_pre_end:
+                return hidden_states
+
+            hidden_states = self.norm_out(hidden_states)
+            hidden_states = nn.swish(hidden_states)
+            hidden_states = self.conv_out(hidden_states)
+
+            return hidden_states
+
+    def resume(self, operation: str = "default", z_array_in = None, deterministic: bool = True):
+        temb = None
+        if operation == "from_z_blockin":
+            # middle
+            hidden_states = self.mid(z_array_in, temb, deterministic=deterministic)
+
+            for block in reversed(self.up):
+                hidden_states = block(hidden_states, temb, deterministic=deterministic)
+
+            # end
+            if self.config.give_pre_end:
+                return hidden_states
+
+            hidden_states = self.norm_out(hidden_states)
+            hidden_states = nn.swish(hidden_states)
+            hidden_states = self.conv_out(hidden_states)
+
+            return hidden_states
+        if operation == "from_z_middle":        
+            for block in reversed(self.up):
+                hidden_states = block(z_array_in, temb, deterministic=deterministic)
 
             # end
             if self.config.give_pre_end:
