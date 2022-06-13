@@ -121,7 +121,7 @@ class ResnetBlock(nn.Module):
                     dtype=self.dtype,
                 )
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle", z_array = None):
         residual = hidden_states
         hidden_states = self.norm1(hidden_states)
         hidden_states = nn.swish(hidden_states)
@@ -224,11 +224,11 @@ class UpsamplingBlock(nn.Module):
                                      self.config.resamp_with_conv,
                                      dtype=self.dtype)
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle", z_array = None):
         for res_block in self.block:
             hidden_states = res_block(hidden_states,
                                       temb,
-                                      deterministic=deterministic, operation=operation)
+                                      deterministic=deterministic, operation=operation, z_array=z_array)
             for attn_block in self.attn:
                 hidden_states = attn_block(hidden_states)
 
@@ -272,11 +272,11 @@ class DownsamplingBlock(nn.Module):
                                          self.config.resamp_with_conv,
                                          dtype=self.dtype)
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle", z_array = None):
         for res_block in self.block:
             hidden_states = res_block(hidden_states,
                                       temb,
-                                      deterministic=deterministic, operation=operation)
+                                      deterministic=deterministic, operation=operation, z_array=z_array)
             for attn_block in self.attn:
                 hidden_states = attn_block(hidden_states)
 
@@ -309,14 +309,14 @@ class MidBlock(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, hidden_states, temb=None, deterministic: bool = True, operation: str = "to_z_middle", z_array = None):
         hidden_states = self.block_1(hidden_states,
                                      temb,
-                                     deterministic=deterministic, operation=operation)
+                                     deterministic=deterministic, operation=operation, z_array=z_array)
         hidden_states = self.attn_1(hidden_states)
         hidden_states = self.block_2(hidden_states,
                                      temb,
-                                     deterministic=deterministic, operation=operation)
+                                     deterministic=deterministic, operation=operation, z_array=z_array)
         return hidden_states
 
 
@@ -367,17 +367,17 @@ class Encoder(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
+    def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle", z_array = None):
         # timestep embedding
         temb = None
 
         # downsampling
         hidden_states = self.conv_in(pixel_values)
         for block in self.down:
-            hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation)
+            hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation, z_array=z_array)
 
         # middle
-        hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
+        hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation, z_array=z_array)
 
         # end
         hidden_states = self.norm_out(hidden_states)
@@ -438,7 +438,7 @@ class Decoder(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, hidden_states, deterministic: bool = True, operation: str = "default"):
+    def __call__(self, hidden_states, deterministic: bool = True, operation: str = "default", z_array = None):
         # timestep embedding
         temb = None
 
@@ -454,15 +454,22 @@ class Decoder(nn.Module):
         print("Fase 2", flush=True)
         if not (operation == "from_z_middle"):
             # middle
-            hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
-            if operation == "to_z_middle":
-                print(operation, flush=True)
-                return hidden_states
+            if operation == "from_z_blockin":
+                hidden_states = self.mid(z_array, temb, deterministic=deterministic, operation=operation)
+            else:
+                hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
+                if operation == "to_z_middle":
+                    print(operation, flush=True)
+                    return hidden_states
 
         print("Fase final", flush=True)
+        if operation == "from_z_middle":
+            for block in reversed(self.up):
+                hidden_states = block(z_array, temb, deterministic=deterministic, operation=operation)
+        else:
         # upsampling
-        for block in reversed(self.up):
-            hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation)
+            for block in reversed(self.up):
+                hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation)
 
         # end
         if self.config.give_pre_end:
@@ -545,11 +552,13 @@ class VQModule(nn.Module):
     dtype: jnp.dtype = jnp.float32
 
 
-    def set_operation(self, operation: str = "to_z_middle"):
+    def set_variables(self, operation: str = "to_z_middle", z_array = None):
         self.operation = operation
+        self.z_array = z_array
 
     def setup(self):
         self.operation = "to_z_middle"
+        self.z_array = None
         self.encoder = Encoder(self.config, dtype=self.dtype)
         self.decoder = Decoder(self.config, dtype=self.dtype)
         self.quantize = VectorQuantizer(self.config, dtype=self.dtype)
@@ -568,26 +577,25 @@ class VQModule(nn.Module):
             dtype=self.dtype,
         )
 
-    def encode(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
-        hidden_states = self.encoder(pixel_values, deterministic=deterministic, operation=operation)
+    def encode(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle", z_array = None):
+        hidden_states = self.encoder(pixel_values, deterministic=deterministic, operation=operation, z_array=z_array)
         hidden_states = self.quant_conv(hidden_states)
         quant_states, indices = self.quantize(hidden_states)
         return quant_states, indices
 
-    def decode(self, hidden_states, deterministic: bool = True, operation: str = "to_z_middle"):
+    def decode(self, hidden_states, deterministic: bool = True, operation: str = "to_z_middle", z_array = None):
         hidden_states = self.post_quant_conv(hidden_states)
-        hidden_states = self.decoder(hidden_states, deterministic=deterministic, operation=operation)
+        hidden_states = self.decoder(hidden_states, deterministic=deterministic, operation=operation, z_array=z_array)
         return hidden_states
 
     def decode_code(self, code_b):
-        if not (self.operation == "from_z_middle" or self.operation == "from_z_blockin"):
-            hidden_states = self.quantize.get_codebook_entry(code_b)
-        hidden_states = self.decode(hidden_states, operation=self.operation)
+        hidden_states = self.quantize.get_codebook_entry(code_b)
+        hidden_states = self.decode(hidden_states, operation=self.operation, z_array=self.z_array)
         return hidden_states
 
-    def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
-        quant_states, indices = self.encode(pixel_values, deterministic=deterministic, operation=operation)
-        hidden_states = self.decode(quant_states, deterministic=deterministic, operation=operation)
+    def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle", z_array = None):
+        quant_states, indices = self.encode(pixel_values, deterministic=deterministic, operation=operation, z_array=z_array)
+        hidden_states = self.decode(quant_states, deterministic=deterministic, operation=operation, z_array=z_array)
         return hidden_states, indices
 
 
@@ -657,8 +665,8 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
             method=self.module.decode,
         )
 
-    def decode_code(self, indices, params: dict = None, operation: str = "to_z_middle"):
-        self.module.set_operation(operation)
+    def decode_code(self, indices, params: dict = None, operation: str = "to_z_middle", z_array = None):
+        self.module.set_variables(operation, z_array)
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
                                  method=self.module.decode_code)
