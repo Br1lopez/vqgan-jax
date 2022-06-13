@@ -547,7 +547,7 @@ class VectorQuantizer(nn.Module):
         return z_q
 
 
-
+operation_type = ""
 
 class VQModule(nn.Module):
     config: VQGANConfig
@@ -555,7 +555,6 @@ class VQModule(nn.Module):
 
     def set_variables(self, operation: str = "to_z_middle", z_array = None):
         print("2 " + operation)
-        global operation_type
         operation_type = operation
         self.z_array = z_array
 
