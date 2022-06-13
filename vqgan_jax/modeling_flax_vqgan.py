@@ -570,8 +570,8 @@ class VQModule(nn.Module):
         hidden_states = self.decoder(hidden_states, deterministic=deterministic, operation=operation)
         return hidden_states
 
-    def decode_code(self, code_b):
-        hidden_states = self.quantize.get_codebook_entry(code_b)
+    def decode_code(self, code_b, operation: str = "to_z_middle"):
+        hidden_states = self.quantize.get_codebook_entry(code_b, operation=operation)
         hidden_states = self.decode(hidden_states)
         return hidden_states
 
