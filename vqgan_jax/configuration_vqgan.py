@@ -20,8 +20,6 @@ class VQGANConfig(PretrainedConfig):
         double_z: bool = False,
         resamp_with_conv: bool = True,
         give_pre_end: bool = False,
-        operation_type = "",
-        z_array = None,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -40,5 +38,3 @@ class VQGANConfig(PretrainedConfig):
         self.resamp_with_conv = resamp_with_conv
         self.give_pre_end = give_pre_end
         self.num_resolutions = len(ch_mult)
-        self.operation_type = operation_type
-        self.z_array = z_array

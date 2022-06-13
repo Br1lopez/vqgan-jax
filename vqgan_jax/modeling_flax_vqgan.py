@@ -14,6 +14,9 @@ from transformers.modeling_flax_utils import FlaxPreTrainedModel
 
 from .configuration_vqgan import VQGANConfig
 
+operation_type = ""
+z_array = None
+
 
 class Upsample(nn.Module):
   in_channels: int
@@ -442,26 +445,26 @@ class Decoder(nn.Module):
         # timestep embedding
         temb = None
 
-        if not (self.config.operation_type == "from_z_blockin" or self.config.operation_type == "from_z_middle"):
+        if not (operation_type == "from_z_blockin" or operation_type == "from_z_middle"):
             # z to block_in
             hidden_states = self.conv_in(hidden_states)
-            if self.config.operation_type == "to_z_blockin":
-                print(self.config.operation_type, flush=True)
+            if operation_type == "to_z_blockin":
+                print(operation_type, flush=True)
                 return hidden_states
 
-        if not (self.config.operation_type == "from_z_middle"):
+        if not (operation_type == "from_z_middle"):
             # middle
-            if self.config.operation_type == "from_z_blockin":
-                hidden_states = self.mid(self.config.z_array, temb, deterministic=deterministic)
+            if operation_type == "from_z_blockin":
+                hidden_states = self.mid(z_array, temb, deterministic=deterministic)
             else:
                 hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
-                if self.config.operation_type == "to_z_middle":
-                    print(self.config.operation_type, flush=True)
+                if operation_type == "to_z_middle":
+                    print(operation_type, flush=True)
                     return hidden_states
 
-        if self.config.operation_type == "from_z_middle":
+        if operation_type == "from_z_middle":
             for block in reversed(self.up):
-                hidden_states = block(self.config.z_array, temb, deterministic=deterministic)
+                hidden_states = block(z_array, temb, deterministic=deterministic)
         else:
             # upsampling
             for block in reversed(self.up):
@@ -653,9 +656,11 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
         method=self.module.decode,
     )
 
-  def decode_code(self, indices, params: dict = None, operation: str = "default", z_array = None):
-    self.config.operation_type = operation
-    self.config.z_array = z_array
+  def decode_code(self, indices, params: dict = None, operation: str = "default", z_array_in = None):
+    global operation_type
+    global z_array
+    operation_type = operation
+    z_array = z_array_in
     return self.module.apply({"params": params or self.params},
                              jnp.array(indices, dtype="i4"),
                              method=self.module.decode_code)
