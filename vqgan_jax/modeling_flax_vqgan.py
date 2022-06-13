@@ -553,10 +553,12 @@ class VQModule(nn.Module):
 
 
     def set_variables(self, operation: str = "to_z_middle", z_array = None):
+        print("2 " + operation)
         self.operation = operation
         self.z_array = z_array
 
     def setup(self):
+        print("setup")
         self.operation = "to_z_middle"
         self.z_array = None
         self.encoder = Encoder(self.config, dtype=self.dtype)
@@ -666,6 +668,7 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
         )
 
     def decode_code(self, indices, params: dict = None, operation: str = "to_z_middle", z_array = None):
+        print("1 " + operation)
         self.module.set_variables(operation, z_array)
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
