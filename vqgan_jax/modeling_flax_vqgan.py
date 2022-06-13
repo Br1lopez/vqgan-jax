@@ -133,7 +133,7 @@ class ResnetBlock(nn.Module):
 
         hidden_states = self.norm2(hidden_states)
         hidden_states = nn.swish(hidden_states)
-        hidden_states = self.dropout(hidden_states, deterministic, operation)
+        hidden_states = self.dropout(hidden_states, deterministic)
         hidden_states = self.conv2(hidden_states)
 
         if self.in_channels != self.out_channels_:
@@ -576,8 +576,8 @@ class VQModule(nn.Module):
         return hidden_states
 
     def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
-        quant_states, indices = self.encode(pixel_values, deterministic, operation)
-        hidden_states = self.decode(quant_states, deterministic, operation)
+        quant_states, indices = self.encode(pixel_values, deterministic=deterministic, operation=operation)
+        hidden_states = self.decode(quant_states, deterministic=deterministic, operation=operation)
         return hidden_states, indices
 
 
