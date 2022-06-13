@@ -441,7 +441,9 @@ class Decoder(nn.Module):
             dtype=self.dtype,
         )
 
-    def __call__(self, hidden_states, deterministic: bool = True, operation: str = "default", z_array = None):
+    def __call__(self, hidden_states, deterministic: bool = True):
+        global operation_type
+        global z_array
         # timestep embedding
         temb = None
 
