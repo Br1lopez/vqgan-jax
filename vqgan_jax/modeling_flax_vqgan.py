@@ -388,80 +388,98 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-  config: VQGANConfig
-  dtype: jnp.dtype = jnp.float32
+    config: VQGANConfig
+    dtype: jnp.dtype = jnp.float32
 
-  def setup(self):
-    self.temb_ch = 0
+    def setup(self):
+        self.temb_ch = 0
 
-    # compute in_ch_mult, block_in and curr_res at lowest res
-    block_in = self.config.ch * self.config.ch_mult[self.config.num_resolutions
-                                                    - 1]
-    curr_res = self.config.resolution // 2**(self.config.num_resolutions - 1)
-    self.z_shape = (1, self.config.z_channels, curr_res, curr_res)
+        # compute in_ch_mult, block_in and curr_res at lowest res
+        block_in = self.config.ch * self.config.ch_mult[self.config.num_resolutions
+                                                        - 1]
+        curr_res = self.config.resolution // 2 ** (self.config.num_resolutions - 1)
+        self.z_shape = (1, self.config.z_channels, curr_res, curr_res)
 
-    # z to block_in
-    self.conv_in = nn.Conv(
-        block_in,
-        kernel_size=(3, 3),
-        strides=(1, 1),
-        padding=((1, 1), (1, 1)),
-        dtype=self.dtype,
-    )
+        # z to block_in
+        self.conv_in = nn.Conv(
+            block_in,
+            kernel_size=(3, 3),
+            strides=(1, 1),
+            padding=((1, 1), (1, 1)),
+            dtype=self.dtype,
+        )
 
-    # middle
-    self.mid = MidBlock(block_in,
-                        self.temb_ch,
-                        self.config.dropout,
-                        dtype=self.dtype)
+        # middle
+        self.mid = MidBlock(block_in,
+                            self.temb_ch,
+                            self.config.dropout,
+                            dtype=self.dtype)
 
-    # upsampling
-    upsample_blocks = []
-    for i_level in reversed(range(self.config.num_resolutions)):
-      upsample_blocks.append(
-          UpsamplingBlock(self.config,
-                          curr_res,
-                          block_idx=i_level,
-                          dtype=self.dtype))
-      if i_level != 0:
-        curr_res = curr_res * 2
-    self.up = list(
-        reversed(upsample_blocks))  # reverse to get consistent order
+        # upsampling
+        upsample_blocks = []
+        for i_level in reversed(range(self.config.num_resolutions)):
+            upsample_blocks.append(
+                UpsamplingBlock(self.config,
+                                curr_res,
+                                block_idx=i_level,
+                                dtype=self.dtype))
+            if i_level != 0:
+                curr_res = curr_res * 2
+        self.up = list(
+            reversed(upsample_blocks))  # reverse to get consistent order
 
-    # end
-    self.norm_out = nn.GroupNorm(num_groups=32, epsilon=1e-6)
-    self.conv_out = nn.Conv(
-        self.config.out_ch,
-        kernel_size=(3, 3),
-        strides=(1, 1),
-        padding=((1, 1), (1, 1)),
-        dtype=self.dtype,
-    )
+        # end
+        self.norm_out = nn.GroupNorm(num_groups=32, epsilon=1e-6)
+        self.conv_out = nn.Conv(
+            self.config.out_ch,
+            kernel_size=(3, 3),
+            strides=(1, 1),
+            padding=((1, 1), (1, 1)),
+            dtype=self.dtype,
+        )
 
-  def __call__(self, hidden_states, deterministic: bool = True):
-    # timestep embedding
-    temb = None
+    def __call__(self, hidden_states, deterministic: bool = True, operation: str = "default", z_array = None):
+        # timestep embedding
+        temb = None
 
-    # z to block_in
-    hidden_states = self.conv_in(hidden_states)
+        print("Fase 1", flush=True)
+        if not (self.config.operation_type == "from_z_blockin" or self.config.operation_type == "from_z_middle"):
+            # z to block_in
+            hidden_states = self.conv_in(hidden_states)
+            if self.config.operation_type == "to_z_blockin":
+                print(self.config.operation_type, flush=True)
+                return hidden_states
 
-    # middle
-    hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
 
-    # upsampling
-    for block in reversed(self.up):
-      hidden_states = block(hidden_states, temb, deterministic=deterministic)
+        print("Fase 2", flush=True)
+        if not (self.config.operation_type == "from_z_middle"):
+            # middle
+            if self.config.operation_type == "from_z_blockin":
+                hidden_states = self.mid(self.config.z_array, temb, deterministic=deterministic)
+            else:
+                hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
+                if self.config.operation_type == "to_z_middle":
+                    print(self.config.operation_type, flush=True)
+                    return hidden_states
 
-    # end
-    if self.config.give_pre_end:
-      return hidden_states
+        print("Fase final", flush=True)
+        if self.config.operation_type == "from_z_middle":
+            for block in reversed(self.up):
+                hidden_states = block(self.config.z_array, temb, deterministic=deterministic)
+        else:
+            # upsampling
+            for block in reversed(self.up):
+                hidden_states = block(hidden_states, temb, deterministic=deterministic)
 
-    hidden_states = self.norm_out(hidden_states)
-    hidden_states = nn.swish(hidden_states)
-    hidden_states = self.conv_out(hidden_states)
+        # end
+        if self.config.give_pre_end:
+            return hidden_states
 
-    return hidden_states
+        hidden_states = self.norm_out(hidden_states)
+        hidden_states = nn.swish(hidden_states)
+        hidden_states = self.conv_out(hidden_states)
 
+        return hidden_states
 
 class VectorQuantizer(nn.Module):
   """
