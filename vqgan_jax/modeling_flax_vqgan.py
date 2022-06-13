@@ -442,20 +442,24 @@ class Decoder(nn.Module):
         # timestep embedding
         temb = None
 
+        print("Fase 1", flush=True)
         if not (operation == "from_z_blockin" or operation == "from_z_middle"):
             # z to block_in
             hidden_states = self.conv_in(hidden_states)
             if operation == "to_z_blockin":
-                print("z to block_in", flush=True)
+                print(operation, flush=True)
                 return hidden_states
 
+
+        print("Fase 2", flush=True)
         if not (operation == "from_z_middle"):
             # middle
             hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
             if operation == "to_z_middle":
-                print("z to block_in", flush=True)
+                print(operation, flush=True)
                 return hidden_states
 
+        print("Fase final", flush=True)
         # upsampling
         for block in reversed(self.up):
             hidden_states = block(hidden_states, temb, deterministic=deterministic, operation=operation)
@@ -576,7 +580,8 @@ class VQModule(nn.Module):
         return hidden_states
 
     def decode_code(self, code_b):
-        hidden_states = self.quantize.get_codebook_entry(code_b)
+        if not (self.operation == "from_z_middle" or self.operation == "from_z_blockin"):
+            hidden_states = self.quantize.get_codebook_entry(code_b)
         hidden_states = self.decode(hidden_states, operation=self.operation)
         return hidden_states
 
