@@ -540,8 +540,8 @@ class VQModule(nn.Module):
     config: VQGANConfig
     dtype: jnp.dtype = jnp.float32
 
-    def prueba(self):
-        print("la prueba funciona")
+    def set_operation(self, operation: str = "to_z_middle"):
+        self.operation = operation
 
     def setup(self):
         self.encoder = Encoder(self.config, dtype=self.dtype)
@@ -573,9 +573,9 @@ class VQModule(nn.Module):
         hidden_states = self.decoder(hidden_states, deterministic=deterministic, operation=operation)
         return hidden_states
 
-    def decode_code(self, code_b, operation: str = "to_z_middle"):
+    def decode_code(self, code_b):
         hidden_states = self.quantize.get_codebook_entry(code_b)
-        hidden_states = self.decode(hidden_states, operation=operation)
+        hidden_states = self.decode(hidden_states, operation=self.operation)
         return hidden_states
 
     def __call__(self, pixel_values, deterministic: bool = True, operation: str = "to_z_middle"):
@@ -650,8 +650,8 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
             method=self.module.decode,
         )
 
-    def decode_code(self, indices, params: dict = None):
-        self.module.prueba()
+    def decode_code(self, indices, params: dict = None, operation: str = "to_z_middle"):
+        self.set_operation(operation)
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
                                  method=self.module.decode_code)
