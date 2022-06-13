@@ -453,6 +453,7 @@ class Decoder(nn.Module):
             hidden_states = self.conv_in(hidden_states)
             return self.mid(hidden_states, temb, deterministic=deterministic)
         if operation_type == "from_z_blockin":
+            hidden_states = self.conv_in(hidden_states)
             # middle
             hidden_states = self.mid(z_array, temb, deterministic=deterministic)
 
@@ -469,6 +470,12 @@ class Decoder(nn.Module):
 
             return hidden_states
         if operation_type == "from_z_middle":
+            # z to block_in
+            hidden_states = self.conv_in(hidden_states)
+
+            # middle
+            hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
+            
             for block in reversed(self.up):
                 hidden_states = block(z_array, temb, deterministic=deterministic)
 
