@@ -540,6 +540,9 @@ class VQModule(nn.Module):
     config: VQGANConfig
     dtype: jnp.dtype = jnp.float32
 
+    def __init__(self):
+        self.operation = None
+
     def set_operation(self, operation: str = "to_z_middle"):
         self.operation = operation
 
