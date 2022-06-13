@@ -446,14 +446,14 @@ class Decoder(nn.Module):
             # z to block_in
             hidden_states = self.conv_in(hidden_states)
             if operation == "to_z_blockin":
-                print(hidden_states)
+                print("z to block_in", flush=True)
                 return hidden_states
 
         if not (operation == "from_z_middle"):
             # middle
             hidden_states = self.mid(hidden_states, temb, deterministic=deterministic, operation=operation)
             if operation == "to_z_middle":
-                print(hidden_states)
+                print("z to block_in", flush=True)
                 return hidden_states
 
         # upsampling
