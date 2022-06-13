@@ -447,6 +447,8 @@ class Decoder(nn.Module):
         # timestep embedding
         temb = None
 
+        return operation_type
+
         if not (operation_type == "from_z_blockin" or operation_type == "from_z_middle"):
             # z to block_in
             hidden_states = self.conv_in(hidden_states)
