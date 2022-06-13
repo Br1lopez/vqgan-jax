@@ -540,6 +540,9 @@ class VQModule(nn.Module):
     config: VQGANConfig
     dtype: jnp.dtype = jnp.float32
 
+    def prueba(self):
+        print("la prueba funciona")
+
     def setup(self):
         self.encoder = Encoder(self.config, dtype=self.dtype)
         self.decoder = Decoder(self.config, dtype=self.dtype)
@@ -648,6 +651,7 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
         )
 
     def decode_code(self, indices, params: dict = None):
+        self.module.prueba()
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
                                  method=self.module.decode_code)
