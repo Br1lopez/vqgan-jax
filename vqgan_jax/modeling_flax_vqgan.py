@@ -448,10 +448,10 @@ class Decoder(nn.Module):
         temb = None
 
         if operation_type == "to_z_blockin":
-            return self.conv_in(hidden_states)
+            return [self, self.conv_in(hidden_states)]
         if operation_type == "to_z_middle":
             hidden_states = self.conv_in(hidden_states)
-            return self.mid(hidden_states, temb, deterministic=deterministic)
+            return [self, self.mid(hidden_states, temb, deterministic=deterministic)]
         else:
             # z to block_in
             hidden_states = self.conv_in(hidden_states)
