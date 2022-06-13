@@ -441,7 +441,7 @@ class Decoder(nn.Module):
             dtype=self.dtype,
         )
 
-    def decode(self, hidden_states, deterministic: bool = True):
+    def __call__(self, hidden_states, deterministic: bool = True):
         global operation_type
         global z_array
         # timestep embedding
@@ -473,7 +473,7 @@ class Decoder(nn.Module):
 
             return hidden_states
 
-    def resume(self, operation: str = "default", z_array = None, deterministic: bool = True):
+    def resume(self, operation: str = "default", z_array_in = None, deterministic: bool = True):
         temb = None
         if operation == "from_z_blockin":
             # middle
@@ -491,7 +491,7 @@ class Decoder(nn.Module):
             hidden_states = self.conv_out(hidden_states)
 
             return hidden_states
-        if operation == "from_z_middle":
+        if operation == "from_z_middle":        
             for block in reversed(self.up):
                 hidden_states = block(z_array_in, temb, deterministic=deterministic)
 
@@ -602,15 +602,13 @@ class VQModule(nn.Module):
 
     def decode(self, hidden_states, deterministic: bool = True):
         hidden_states = self.post_quant_conv(hidden_states)
-        hidden_states = self.decoder.decode(hidden_states, deterministic=deterministic)
+        hidden_states = self.decoder(hidden_states, deterministic=deterministic)
         return hidden_states
 
     def decode_code(self, code_b):
         hidden_states = self.quantize.get_codebook_entry(code_b)
-        hidden_states = self.de
-
-    def resume(self, operation_type: str="default", z_array_in = None):
-        hidden_states = self.decoder.resume(z_array=z_array_in, operation=operation_type)
+        hidden_states = self.decode(hidden_states)
+        return hidden_states
 
     def __call__(self, pixel_values, deterministic: bool = True):
         quant_states, indices = self.encode(pixel_values, deterministic)
@@ -692,7 +690,6 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
                                  method=self.module.decode_code)
-
 
     def __call__(
             self,
