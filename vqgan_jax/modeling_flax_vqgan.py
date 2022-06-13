@@ -14,6 +14,7 @@ from transformers.modeling_flax_utils import FlaxPreTrainedModel
 
 from .configuration_vqgan import VQGANConfig
 
+import variables
 
 class Upsample(nn.Module):
     in_channels: int
@@ -553,15 +554,10 @@ class VQModule(nn.Module):
     config: VQGANConfig
     dtype: jnp.dtype = jnp.float32
 
-    def set_variables(self, operation: str = "to_z_middle", z_array = None):
-        print("2 " + operation)
-        operation_type = operation
-        self.z_array = z_array
-
     def setup(self):
-        self.operation = operation_type
+        self.operation = variables.operation_type
         print("setup" + self.operation)
-        self.z_array = None
+        self.z_array = variables.z_array
         self.encoder = Encoder(self.config, dtype=self.dtype)
         self.decoder = Decoder(self.config, dtype=self.dtype)
         self.quantize = VectorQuantizer(self.config, dtype=self.dtype)
@@ -669,7 +665,8 @@ class VQGANPreTrainedModel(FlaxPreTrainedModel):
         )
 
     def decode_code(self, indices, params: dict = None, operation: str = "to_z_middle", z_array = None):
-        self.module.set_variables(operation, z_array)
+        variables.operation_type = operation
+        variables.z_array = z_array
         return self.module.apply({"params": params or self.params},
                                  jnp.array(indices, dtype="i4"),
                                  method=self.module.decode_code)
