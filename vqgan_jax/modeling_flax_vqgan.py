@@ -607,7 +607,7 @@ class VQModule(nn.Module):
 
     def decode_code(self, code_b):
         hidden_states = self.quantize.get_codebook_entry(code_b)
-        hidden_states = self.decode(hidden_states)
+        hidden_states = self.de
 
     def resume(self, operation_type: str="default", z_array_in = None):
         hidden_states = self.decoder.resume(z_array=z_array_in, operation=operation_type)
