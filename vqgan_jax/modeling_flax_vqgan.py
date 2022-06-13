@@ -550,14 +550,16 @@ class VectorQuantizer(nn.Module):
 class VQModule(nn.Module):
     config: VQGANConfig
     dtype: jnp.dtype = jnp.float32
+    operation_type = ""
 
 
     def set_variables(self, operation: str = "to_z_middle", z_array = None):
         print("2 " + operation)
-        self.operation = operation
+        self.operation_type = operation
         self.z_array = z_array
 
     def setup(self):
+        self.operation = self.operation_type
         print("setup" + self.operation)
         self.z_array = None
         self.encoder = Encoder(self.config, dtype=self.dtype)
