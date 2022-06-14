@@ -439,27 +439,25 @@ class Decoder(nn.Module):
         )
 
     def __call__(self, hidden_states, deterministic: bool = True):
-        with open('/content/config.txt') as f:
-            lines = f.readlines()
-            # timestep embedding
-            temb = None
+        # timestep embedding
+        temb = None
 
-            hidden_states = np.load('/content/in.npy', allow_pickle=True)
+        hidden_states = np.load('/content/in.npy', allow_pickle=True)
 
-            # upsampling
-            for block in reversed(self.up):
-                hidden_states = block(hidden_states, temb, deterministic=deterministic)
+        # upsampling
+        for block in reversed(self.up):
+            hidden_states = block(hidden_states, temb, deterministic=deterministic)
 
-            # end
-            # if self.config.give_pre_end:
-            #    return hidden_states
+        # end
+        # if self.config.give_pre_end:
+        #    return hidden_states
 
-            hidden_states = self.norm_out(hidden_states)
-            hidden_states = nn.swish(hidden_states)
-            hidden_states = self.conv_out(hidden_states)
-            call(lambda x: np.save('/content/out_2.npy', x), hidden_states)
+        hidden_states = self.norm_out(hidden_states)
+        hidden_states = nn.swish(hidden_states)
+        hidden_states = self.conv_out(hidden_states)
+        call(lambda x: np.save('/content/out_2.npy', x), hidden_states)
 
-            return hidden_states
+        return hidden_states
 
 
 class VectorQuantizer(nn.Module):
