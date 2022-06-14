@@ -451,6 +451,7 @@ class Decoder(nn.Module):
             # middle
             hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
             call(lambda x: np.save('/content/out.npy', x), hidden_states)
+            return hidden_states
 
         elif f.read() == "read":
             hidden_states = np.load('/content/in.npy', allow_pickle=True)
@@ -466,8 +467,7 @@ class Decoder(nn.Module):
             hidden_states = self.norm_out(hidden_states)
             hidden_states = nn.swish(hidden_states)
             hidden_states = self.conv_out(hidden_states)
-
-        return hidden_states
+            return hidden_states
 
 
 class VectorQuantizer(nn.Module):
