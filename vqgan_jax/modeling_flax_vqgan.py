@@ -439,7 +439,7 @@ class Decoder(nn.Module):
         )
 
     def __call__(self, hidden_states, deterministic: bool = True):
-        with open('config.txt') as f:
+        with open('/content/config.txt') as f:
             lines = f.readlines()
             # timestep embedding
             temb = None
