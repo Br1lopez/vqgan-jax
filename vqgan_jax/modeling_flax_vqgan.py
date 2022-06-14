@@ -461,8 +461,8 @@ class Decoder(nn.Module):
                 hidden_states = block(hidden_states, temb, deterministic=deterministic)
 
             # end
-            if self.config.give_pre_end:
-                return hidden_states
+            #if self.config.give_pre_end:
+            #    return hidden_states
 
             hidden_states = self.norm_out(hidden_states)
             hidden_states = nn.swish(hidden_states)
