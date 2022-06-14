@@ -443,31 +443,21 @@ class Decoder(nn.Module):
             lines = f.readlines()
             # timestep embedding
             temb = None
-            if "write" in lines[0]:
 
+            hidden_states = np.load('/content/in.npy', allow_pickle=True)
 
-                # z to block_in
-                hidden_states = self.conv_in(hidden_states)
+            # upsampling
+            for block in reversed(self.up):
+                hidden_states = block(hidden_states, temb, deterministic=deterministic)
 
-                # middle
-                hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
-                call(lambda x: np.save('/content/out_1.npy', x), hidden_states)
+            # end
+            # if self.config.give_pre_end:
+            #    return hidden_states
 
-            if "read" in lines[0]:
-                hidden_states = np.load('/content/in.npy', allow_pickle=True)
-
-                # upsampling
-                for block in reversed(self.up):
-                    hidden_states = block(hidden_states, temb, deterministic=deterministic)
-
-                # end
-                #if self.config.give_pre_end:
-                #    return hidden_states
-
-                hidden_states = self.norm_out(hidden_states)
-                hidden_states = nn.swish(hidden_states)
-                hidden_states = self.conv_out(hidden_states)
-                call(lambda x: np.save('/content/out_2.npy', x), hidden_states)
+            hidden_states = self.norm_out(hidden_states)
+            hidden_states = nn.swish(hidden_states)
+            hidden_states = self.conv_out(hidden_states)
+            call(lambda x: np.save('/content/out_2.npy', x), hidden_states)
 
             return hidden_states
 
