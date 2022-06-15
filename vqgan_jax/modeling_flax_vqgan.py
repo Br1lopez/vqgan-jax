@@ -447,6 +447,16 @@ class Decoder(nn.Module):
 
         # middle
         hidden_states = self.mid(hidden_states, temb, deterministic=deterministic)
+
+        # upsampling
+        for block in reversed(self.up):
+            hidden_states = block(hidden_states, temb, deterministic=deterministic)
+
+        # end
+        # if self.config.give_pre_end:
+        #    return hidden_states
+
+        hidden_states = self.norm_out(hidden_states)
         call(lambda x: np.save('/content/drive/MyDrive/dalle-mini/resources/out.npy', x), hidden_states)
 
         return hidden_states
