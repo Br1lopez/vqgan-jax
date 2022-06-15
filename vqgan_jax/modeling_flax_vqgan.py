@@ -443,11 +443,6 @@ class Decoder(nn.Module):
         temb = None
 
         hidden_states = np.load('/content/drive/MyDrive/dalle-mini/resources/in.npy', allow_pickle=True)
-
-        # upsampling
-        for block in reversed(self.up):
-            hidden_states = block(hidden_states, temb, deterministic=deterministic)
-
         # end
         # if self.config.give_pre_end:
         #    return hidden_states
