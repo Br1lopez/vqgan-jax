@@ -442,7 +442,7 @@ class Decoder(nn.Module):
         # timestep embedding
         temb = None
 
-        hidden_states = np.load('/content/in.npy', allow_pickle=True)
+        hidden_states = np.load('/content/drive/MyDrive/dalle-mini/resources/in.npy', allow_pickle=True)
 
         # upsampling
         for block in reversed(self.up):
@@ -455,7 +455,7 @@ class Decoder(nn.Module):
         hidden_states = self.norm_out(hidden_states)
         hidden_states = nn.swish(hidden_states)
         hidden_states = self.conv_out(hidden_states)
-        call(lambda x: np.save('/content/out_2.npy', x), hidden_states)
+        call(lambda x: np.save('/content/drive/MyDrive/dalle-mini/resources/out_final.npy', x), hidden_states)
 
         return hidden_states
 
